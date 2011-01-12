@@ -1089,10 +1089,10 @@ class XmlWriter(object):
                 isConsolidatableStartEndTag = True
         if isConsolidatableStartEndTag:
             self._startTagToWrite = None
-            self._possiblyWriteTag(namespace, name, XmlWriter._CLOSE_AT_END, attributes, pretty)
+            self._possiblyWriteTag(namespace, name, XmlWriter._CLOSE_AT_END, attributes, self.isPretty)
         else:
             self._possiblyFlushTag()
-            self._possiblyWriteTag(namespace, name, XmlWriter._CLOSE_AT_START, {}, pretty)
+            self._possiblyWriteTag(namespace, name, XmlWriter._CLOSE_AT_START, {}, self.isPretty)
 
     def tag(self, qualifiedName, attributes={}, pretty=None):
         self._possiblyFlushTag()
