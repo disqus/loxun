@@ -2,7 +2,7 @@
 """
 Tests for loxun.
 """
-# Copyright (C) 2010 Thomas Aglassinger
+# Copyright (C) 2010-11 Thomas Aglassinger
 #
 # This program is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Lesser General Public License as published by
@@ -78,6 +78,29 @@ class XmlWriterTest(unittest.TestCase):
             loxun.XmlWriter(out, newline="xxx")
         except AssertionError, error:
             self.assertEquals(str(error), "`newline` is u'xxx' but must be one of: [u'\\r', u'\\n', u'\\r\\n']")
+
+    def testIndentWithPretty(self):
+        out = StringIO()
+        xml = loxun.XmlWriter(out, indent="\t")
+        xml.startTag("a")
+        xml.startTag("b")
+        xml.tag("c")
+        xml.text("some text")
+        xml.endTag("b")
+        xml.endTag("a")
+        self._assertXmlTextEqual(xml, ["<?xml version=\"1.0\" encoding=\"utf-8\"?>", "<a>", "\t<b>", "\t\t<c />", "\t\tsome text", "\t</b>", "</a>"])
+
+    def testDefautltIndentWithoutPretty(self):
+        # Regression test for issue #1.
+        out = StringIO()
+        xml = loxun.XmlWriter(out, pretty=False)
+        xml.startTag("a")
+        xml.startTag("b")
+        xml.tag("c")
+        xml.text("some text")
+        xml.endTag("b")
+        xml.endTag("a")
+        self._assertXmlTextEqual(xml, ["<?xml version=\"1.0\" encoding=\"utf-8\"?><a><b><c/>some text</b></a>"])
 
     def testIsoEuro(self):
         out = StringIO()
