@@ -683,7 +683,13 @@ class XmlWriter(object):
     @property
     def isPretty(self):
         """Pretty print writes to the ``output``?"""
-        return self._pretty
+        try:
+            pretty = self._elementStack[-1][2]
+        except IndexError:
+            return self._pretty
+        
+        if pretty is None:
+            return self._pretty
 
     @property
     def encoding(self):
@@ -848,14 +854,6 @@ class XmlWriter(object):
     def _writeIndent(self):
         self._write(self._indent * len(self._elementStack))
 
-    def _writePrettyIndent(self):
-        if self._pretty:
-            self._writeIndent()
-
-    def _writePrettyNewline(self):
-        if self._pretty:
-            self.newline()
-
     def _writeEscaped(self, text):
         assert text is not None
         _assertIsUnicode("text", text)
@@ -957,7 +955,7 @@ class XmlWriter(object):
         assert close in (XmlWriter._CLOSE_NONE, XmlWriter._CLOSE_AT_START, XmlWriter._CLOSE_AT_END)
         assert attributes is not None
         if pretty is None:
-            pretty = self._pretty
+            pretty = self.isPretty
         if pretty:
             self._write(indent)
         self._write(u"<")
@@ -974,7 +972,7 @@ class XmlWriter(object):
                 self._write(u" ")
             self._write(u"/")
         self._write(u">")
-        if self._pretty:
+        if pretty:
             self.newline()
 
     def _possiblyFlushTag(self):
@@ -1129,8 +1127,9 @@ class XmlWriter(object):
         """
         self._possiblyFlushTag()
         _validateNotNone(u"text", text)
+        pretty = self.isPretty
         uniText = self._unicodedFromString(text)
-        if self._pretty:
+        if pretty:
             for uniLine in StringIO(uniText):
                 self._writeIndent()
                 uniLine = uniLine.lstrip(" \t").rstrip(" \t\r\n")
@@ -1187,19 +1186,22 @@ class XmlWriter(object):
         hasNewline = (u"\n" in uniText) or (u"\r" in uniText)
         hasStartBlank = uniText and uniText[0].isspace()
         hasEndBlank = (len(uniText) > 1) and uniText[-1].isspace()
-        self._writePrettyIndent()
+        pretty = self.isPretty
+        if pretty:
+            self._writeIndent()
         self._write(u"<!--");
         if hasNewline:
-            if self._pretty:
+            if pretty:
                 self.newline()
             elif embedInBlanks and not hasStartBlank:
                 self._write(u" ")
             for uniLine in StringIO(uniText):
-                if self._pretty:
-                    self._writeIndent()
+                self._writeIndent()
                 self._writeEscaped(uniLine.rstrip("\n\r"))
-                self.newline()
-            self._writePrettyIndent()
+                if pretty:
+                    self.newline()
+            if pretty:
+                self._writeIndent()
         else:
             if embedInBlanks and not hasStartBlank:
                 self._write(u" ")
@@ -1207,7 +1209,7 @@ class XmlWriter(object):
             if embedInBlanks and not hasEndBlank:
                 self._write(u" ")
         self._write(u"-->");
-        if self._pretty:
+        if pretty:
             self.newline()
 
     def cdata(self, text):
@@ -1232,7 +1234,8 @@ class XmlWriter(object):
             <tag>&&&]]>
         """
         self._possiblyFlushTag()
-        self._rawBlock(u"CDATA section", XmlWriter._CDATA_START, XmlWriter._CDATA_END, text)
+        pretty = self.isPretty
+        self._rawBlock(u"CDATA section", XmlWriter._CDATA_START, XmlWriter._CDATA_END, text, pretty=pretty)
 
     def processingInstruction(self, target, text):
         """
@@ -1263,7 +1266,7 @@ class XmlWriter(object):
             uniFullText += self._unicodedFromString(text)
         self._rawBlock(u"processing instruction", XmlWriter._PROCESSING_START, XmlWriter._PROCESSING_END, uniFullText)
 
-    def _rawBlock(self, name, start, end, text):
+    def _rawBlock(self, name, start, end, text, pretty=None):
         _assertIsUnicode("name", name)
         _assertIsUnicode("start", start)
         _assertIsUnicode("end", end)
@@ -1271,11 +1274,15 @@ class XmlWriter(object):
         uniText = self._unicodedFromString(text)
         if end in uniText:
             raise XmlError("text for %s must not contain \"%s\"" % (name, end))
-        self._writePrettyIndent()
+        if pretty is None:
+            pretty = self.isPretty
+        if pretty:
+            self._writeIndent()
         self._write(start)
         self._write(uniText)
         self._write(end)
-        self._writePrettyNewline()
+        if pretty:
+            self.newline()
 
     def raw(self, text):
         """
