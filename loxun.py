@@ -1212,7 +1212,8 @@ class XmlWriter(object):
             elif embedInBlanks and not hasStartBlank:
                 self._write(u" ")
             for uniLine in StringIO(uniText):
-                self._writeIndent()
+                if pretty:
+                    self._writeIndent()
                 self._writeEscaped(uniLine.rstrip("\n\r"))
                 if pretty:
                     self.newline()
