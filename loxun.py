@@ -883,13 +883,16 @@ class XmlWriter(object):
             raise XmlError(u"namespace %r must added only once for current scope but already is %r" % (uniName, uniUri))
         self._namespacesToAdd.append((uniName, uniUri))
 
-    def _possiblyWriteTag(self, namespace, name, close, attributes={}):
+    def _possiblyWriteTag(self, namespace, name, close, attributes={}, pretty=None):
         _assertIsUnicode("namespace", namespace)
         assert name
         _assertIsUnicode("name", name)
         assert close
         assert close in (XmlWriter._CLOSE_NONE, XmlWriter._CLOSE_AT_START, XmlWriter._CLOSE_AT_END)
         assert attributes is not None
+
+        if pretty is None:
+            pretty = self.isPretty
 
         actualAttributes = {}
 
@@ -923,7 +926,7 @@ class XmlWriter(object):
             actualAttributes[uniQualifiedAttributeName] = self._unicoded(attributeValue)
 
         # Prepare indentation and qualified tag name to be written.
-        if self.isPretty:
+        if pretty:
             indent = self._indent * len(self._elementStack)
         else:
             indent = u""
@@ -934,9 +937,9 @@ class XmlWriter(object):
             qualifiedTagName = name
 
         if close == XmlWriter._CLOSE_NONE:
-            self._startTagToWrite = (indent, qualifiedTagName, actualAttributes)
+            self._startTagToWrite = (indent, qualifiedTagName, actualAttributes, pretty)
         else:
-            self._actuallyWriteTag(indent, qualifiedTagName, actualAttributes, close)
+            self._actuallyWriteTag(indent, qualifiedTagName, actualAttributes, close, pretty)
 
         # Process name spaces to remove
         if close in [XmlWriter._CLOSE_AT_END, XmlWriter._CLOSE_AT_START]:
@@ -944,7 +947,7 @@ class XmlWriter(object):
             if scopeToRemove in self._namespaces:
                 del self._namespaces[scopeToRemove]
             
-    def _actuallyWriteTag(self, indent, qualifiedTagName, attributes, close):
+    def _actuallyWriteTag(self, indent, qualifiedTagName, attributes, close, pretty=None):
         assert self._startTagToWrite is None
         assert indent is not None
         _assertIsUnicode("indent", indent)
@@ -953,7 +956,9 @@ class XmlWriter(object):
         assert close
         assert close in (XmlWriter._CLOSE_NONE, XmlWriter._CLOSE_AT_START, XmlWriter._CLOSE_AT_END)
         assert attributes is not None
-        if self._pretty:
+        if pretty is None:
+            pretty = self._pretty
+        if pretty:
             self._write(indent)
         self._write(u"<")
         if close == XmlWriter._CLOSE_AT_START:
@@ -965,7 +970,7 @@ class XmlWriter(object):
             _assertIsUnicode(u"value of attribute %r" % attributeName, value)
             self._write(u" %s=%s" % (attributeName, _quoted(value)))
         if close == XmlWriter._CLOSE_AT_END:
-            if self.isPretty:
+            if pretty:
                 self._write(u" ")
             self._write(u"/")
         self._write(u">")
@@ -982,11 +987,11 @@ class XmlWriter(object):
         a simple ``tag()``.        
         """
         if self._startTagToWrite:
-            indent, qualifiedTagName, attributes = self._startTagToWrite;
+            indent, qualifiedTagName, attributes, pretty = self._startTagToWrite;
             self._startTagToWrite = None
-            self._actuallyWriteTag(indent, qualifiedTagName, attributes, XmlWriter._CLOSE_NONE)
+            self._actuallyWriteTag(indent, qualifiedTagName, attributes, XmlWriter._CLOSE_NONE, pretty)
 
-    def startTag(self, qualifiedName, attributes={}):
+    def startTag(self, qualifiedName, attributes={}, pretty=None):
         """
         Start tag with name ``qualifiedName``, optionally using a namespace
         prefix separated with a colon (:) and ``attributes``.
@@ -1002,8 +1007,8 @@ class XmlWriter(object):
         self._possiblyFlushTag()
         uniQualifiedName = self._unicodedFromString(qualifiedName)
         namespace, name = _splitPossiblyQualifiedName(u"tag name", uniQualifiedName)
-        self._possiblyWriteTag(namespace, name, XmlWriter._CLOSE_NONE, attributes)
-        self._elementStack.append((namespace, name))
+        self._possiblyWriteTag(namespace, name, XmlWriter._CLOSE_NONE, attributes, pretty)
+        self._elementStack.append((namespace, name, pretty))
 
     def endTag(self, expectedQualifiedName=None):
         """
@@ -1052,7 +1057,7 @@ class XmlWriter(object):
             XmlError: tag stack must not be empty
         """
         try:
-            (namespace, name) = self._elementStack.pop()
+            (namespace, name, pretty) = self._elementStack.pop()
         except IndexError:
             raise XmlError(u"tag stack must not be empty")
         actualQualifiedName = _joinPossiblyQualifiedName(namespace, name)
@@ -1060,26 +1065,26 @@ class XmlWriter(object):
             # Validate that actual tag name matches expected name.
             uniExpectedQualifiedName = self._unicodedFromString(expectedQualifiedName)
             if actualQualifiedName != expectedQualifiedName:
-                self._elementStack.append((namespace, name))
+                self._elementStack.append((namespace, name, pretty))
                 raise XmlError(u"tag name must be %s but is %s" % (uniExpectedQualifiedName, actualQualifiedName))
 
         isConsolidatableStartEndTag = False
         if self._startTagToWrite:
-            _, qualifiedStartTagName, attributes = self._startTagToWrite
+            _, qualifiedStartTagName, attributes, pretty = self._startTagToWrite
             if actualQualifiedName == qualifiedStartTagName:
                 isConsolidatableStartEndTag = True
         if isConsolidatableStartEndTag:
             self._startTagToWrite = None
-            self._possiblyWriteTag(namespace, name, XmlWriter._CLOSE_AT_END, attributes)
+            self._possiblyWriteTag(namespace, name, XmlWriter._CLOSE_AT_END, attributes, pretty)
         else:
             self._possiblyFlushTag()
-            self._possiblyWriteTag(namespace, name, XmlWriter._CLOSE_AT_START)
+            self._possiblyWriteTag(namespace, name, XmlWriter._CLOSE_AT_START, {}, pretty)
 
-    def tag(self, qualifiedName, attributes={}):
+    def tag(self, qualifiedName, attributes={}, pretty=None):
         self._possiblyFlushTag()
         uniQualifiedName = self._unicodedFromString(qualifiedName)
         namespace, name = _splitPossiblyQualifiedName(u"tag name", uniQualifiedName)
-        self._possiblyWriteTag(namespace, name, XmlWriter._CLOSE_AT_END, attributes)
+        self._possiblyWriteTag(namespace, name, XmlWriter._CLOSE_AT_END, attributes, pretty)
 
     def text(self, text):
         """
@@ -1328,7 +1333,7 @@ class XmlWriter(object):
         while self._elementStack:
             if remainingElements:
                 remainingElements += ", "
-            namespace, name = self._elementStack.pop()
+            namespace, name, pretty = self._elementStack.pop()
             remainingElements += u"</%s>" % self._elementName(name, namespace)
         if remainingElements:
             raise XmlError(u"missing end tags must be added: %s" % remainingElements)
